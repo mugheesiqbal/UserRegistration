@@ -17,27 +17,41 @@ namespace UserRegistration.Controllers
         [HttpPost]
 
         [Route("registration")]
-        public IActionResult Register([FromBody] Registration user)
+        public IActionResult Register([FromBody] RegisterRequest req)
         {
-            string query = "insert into registration(name,email,password,isactive)values(@name,@email,@password,@isactive)";
+            if(string.IsNullOrWhiteSpace(req.Email)||string.IsNullOrWhiteSpace(req.Password))
+                return BadRequest("Name,Email and Password are required");
+          
+            string checkQuery = "select count(1) from registration where email=@email";
             string sqlDataSource = _configuration.GetConnectionString("MyConnection");
-            using SqlConnection con= new SqlConnection(sqlDataSource);
+            using (var con = new SqlConnection(sqlDataSource))
             {
-                SqlCommand cmd= new SqlCommand(query, con);
-                cmd.Parameters.AddWithValue("@Name", user.Name);
-                cmd.Parameters.AddWithValue("@Email", user.Email);
-                cmd.Parameters.AddWithValue("@Password", user.Password);
-                cmd.Parameters.AddWithValue("@Isactive", user.Isactive);
+                SqlCommand checkCmd = new SqlCommand(checkQuery, con);
+                checkCmd.Parameters.AddWithValue("@email", req.Email);
+                con.Open();
+                int count = Convert.ToInt32(checkCmd.ExecuteScalar());
+                con.Close();
+                if (count > 0)
+                    return BadRequest("Email already exists");
+                
+
+             string hashed = BCrypt.Net.BCrypt.HashPassword(req.Password);
+                string query = "insert into registration (name,email,password,isactive) values(@Name,@Email,@Password,@Isactive)";
+                SqlCommand cmd = new SqlCommand(query, con);
+                cmd.Parameters.AddWithValue("@Name", req.Name);
+                cmd.Parameters.AddWithValue("@Email", req.Email);
+                cmd.Parameters.AddWithValue("@Password", req.Password);
+                cmd.Parameters.AddWithValue("@Isactive", req.Isactive);
 
                 con.Open();
-                int rows=cmd.ExecuteNonQuery();
+                int rows = cmd.ExecuteNonQuery();
                 con.Close();
                 if (rows > 0)
                     return Ok("user Register Sucessfully");
                 else
                     return BadRequest("Error In Register");
-            }
 
+            }
 
         }
         [HttpPost]
@@ -46,7 +60,7 @@ namespace UserRegistration.Controllers
         {
             string query = "select * from registration where email=@email and password=@password and isactive=1";
             string sqlDataSource = _configuration.GetConnectionString("MyConnection");
-
+            //commit
             using (SqlConnection con = new SqlConnection(sqlDataSource))
             {
                 SqlCommand cmd = new SqlCommand(query, con);
